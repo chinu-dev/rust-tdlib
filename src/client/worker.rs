@@ -494,7 +494,7 @@ async fn handle_td_resp_received<S: TdLibClient + Send + Sync + Clone>(
             if let Some(t) = OBSERVER.notify(t) {
                 match serde_json::from_value::<Update>(t) {
                     Err(err) => {
-                        log::error!("cannot deserialize to update: {err:?}, data: {response:?}")
+                        log::trace!("cannot deserialize to update: {err:?}, data: {response:?}")
                     }
                     Ok(update) => {
                         if let Update::AuthorizationState(auth_state) = update {
@@ -526,7 +526,7 @@ async fn handle_td_resp_received<S: TdLibClient + Send + Sync + Clone>(
                                                 log::trace!("update sent");
                                             }
                                             Err(err) => {
-                                                log::error!("can't send update: {}", err)
+                                                log::trace!("can't send update: {}", err)
                                             }
                                         };
                                     }

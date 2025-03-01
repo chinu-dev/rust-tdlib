@@ -3,6 +3,8 @@ use crate::types::*;
 use uuid::Uuid;
 
 use std::fmt::Debug;
+use serde::de::{self, Deserialize, Deserializer};
+use serde_json::Value;
 
 /// Contains information about the message or the story a message is replying to
 pub trait TDMessageReplyTo: Debug + RObject {}
@@ -76,6 +78,7 @@ pub struct MessageReplyToMessage {
     #[serde(default)]
     message_id: i64,
     /// Manually or automatically chosen quote from the replied message; may be null if none. Only Bold, Italic, Underline, Strikethrough, Spoiler, and CustomEmoji entities can be present in the quote
+    #[serde(default, deserialize_with = "deserialize_quote")]
     quote: Option<FormattedText>,
     /// True, if the quote was manually chosen by the message sender
 
@@ -89,6 +92,56 @@ pub struct MessageReplyToMessage {
     origin_send_date: i32,
     /// Media content of the message if the message was from another chat or topic; may be null for messages from the same chat and messages without media. Can be only one of the following types: messageAnimation, messageAudio, messageContact, messageDice, messageDocument, messageGame, messageInvoice, messageLocation, messagePhoto, messagePoll, messagePremiumGiveaway, messageSticker, messageStory, messageText (for link preview), messageVenue, messageVideo, messageVideoNote, or messageVoiceNote
     content: Option<MessageContent>,
+}
+
+/// Custom deserializer for the `quote` field.
+/// This function will try to interpret the JSON either as a plain FormattedText
+/// or as a text quote (with @type "textQuote") by extracting its "text" field.
+pub fn deserialize_quote<'de, D>(deserializer: D) -> Result<Option<FormattedText>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // First, deserialize the value into a serde_json::Value.
+    let value = Value::deserialize(deserializer)?;
+    // If the value is null, return None.
+    if value.is_null() {
+        return Ok(None);
+    }
+    // Expect an object.
+    if let Value::Object(map) = value {
+        if let Some(Value::String(type_str)) = map.get("@type") {
+            if type_str == "textQuote" {
+                // For textQuote, extract the "text" field and deserialize it as FormattedText.
+                if let Some(text_field) = map.get("text") {
+                    let ft: FormattedText = serde_json::from_value(text_field.clone())
+                        .map_err(de::Error::custom)?;
+                    return Ok(Some(ft));
+                } else {
+                    return Ok(None);
+                }
+            } else if type_str == "formattedText" {
+                // Deserialize the whole object as FormattedText.
+                let ft: FormattedText = serde_json::from_value(Value::Object(map))
+                    .map_err(de::Error::custom)?;
+                return Ok(Some(ft));
+            } else {
+                // Unrecognized type—choose how to handle this (return None or error).
+                return Err(de::Error::custom(format!(
+                    "Unexpected @type in quote: {}",
+                    type_str
+                )));
+            }
+        } else {
+            // If no "@type", attempt to deserialize the object directly as FormattedText.
+            let ft: FormattedText = serde_json::from_value(Value::Object(map))
+                .map_err(de::Error::custom)?;
+            return Ok(Some(ft));
+        }
+    } else {
+        // If not an object, try to deserialize directly.
+        let ft: FormattedText = serde_json::from_value(value).map_err(de::Error::custom)?;
+        return Ok(Some(ft));
+    }
 }
 
 impl RObject for MessageReplyToMessage {

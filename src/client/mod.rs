@@ -388,14 +388,7 @@ where
                     match serde_json::from_value::<Q>(v.clone()) {
                         Ok(val) => Ok(val),
                         Err(e) => {
-                            log::error!("response serialization error: {:?}. Raw response: {:?}", e, v);
-                            // If Q is supposed to be a String, try converting the entire JSON to a string.
-                            if std::any::TypeId::of::<Q>() == std::any::TypeId::of::<String>() {
-                                // This is a hacky workaround: we take the raw JSON value and stringify it.
-                                let s = v.to_string();
-                                // Try to convert s into Q (which is String) directly.
-                                return Ok(serde_json::from_str(&format!("\"{}\"", s)).unwrap());
-                            }
+                            log::info!("response serialization error: {:?}. Raw response: {:?}", e, v);
                             Err(INVALID_RESPONSE_ERROR)
                         }
                     }
